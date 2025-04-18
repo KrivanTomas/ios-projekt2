@@ -1,0 +1,2 @@
+
+void truck_begin();
