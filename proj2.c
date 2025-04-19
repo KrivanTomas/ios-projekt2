@@ -1,7 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 
+#include "proj2.h"
 #include "proj2-shared.h"
 #include "proj2-global.h"
 #include "ferry.h"
@@ -63,35 +62,49 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     // used in child procesess
     parent_pid = getpid();
 
-    printf("Hello from main!\n");
+    // share sequence counter
+    
+    int fd;
+    struct sequence_counter *seq_counter;
+
+    fd = shm_open(SEQUENCE_COUNTER_NAME, O_CREAT | O_EXCL | O_RDWR, 0600);
+    if(fd == -1) errExit("shm_open");
+    if(ftruncate(fd, sizeof(struct sequence_counter)) == -1) errExit("ftruncate");
+
+    seq_counter = mmap(NULL, sizeof(*seq_counter), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if(seq_counter == MAP_FAILED) errExit("mmap");
+    
+    if(sem_init(&seq_counter->sem, 1, 0) == -1) errExit("sem_init:");
+
+    seq_counter->count = 1;
+    
+    if(sem_post(&seq_counter->sem) == -1) errExit("sem_post");
+
+    seq_printf(seq_counter, "Hello from main\n");
 
     // fork ferry
     pid_t pid;
-    if((pid = fork()) == 0) ferry_begin(ferry_capacity);
-    else if(pid == -1) {
-        perror("Failed to fork process (ferry)");
-        exit(EXIT_FAILURE);
-    }
+    if((pid = fork()) == 0) ferry_begin(ferry_capacity, max_ferry_time);
+    else if(pid == -1) errExit("fork");
 
     //return 0;
 
     // fork cars
     for(int i = 0; i < car_count; i++) {
-        if((pid = fork()) == 0) car_begin();
-        else if(pid == -1) {
-            perror("Failed to fork process (car)");
-            exit(EXIT_FAILURE);
-        }
+        if((pid = fork()) == 0) car_begin(i + 1, max_car_time);
+        else if(pid == -1) errExit("fork");
     }
 
     // fork trucks
     for(int i = 0; i < truck_count; i++) {
-        if((pid = fork()) == 0) truck_begin();
-        else if(pid == -1) {
-            perror("Failed to fork process (car)");
-            exit(EXIT_FAILURE);
-        }
+        if((pid = fork()) == 0) truck_begin(i + 1, max_car_time);
+        else if(pid == -1) errExit("fork");
     }
+
+
+    // unlink shared memory
+    sleep(1);
+    shm_unlink(SEQUENCE_COUNTER_NAME);
 
     // temporary unesed warning fix
     max_car_time++;

@@ -1,14 +1,19 @@
 #include "car-impl.h"
-
-void car_begin() {
-    // recieve death signal from parent
-    int err = prctl(PR_SET_PDEATHSIG, SIGHUP);
-    if(err == -1) exit(EXIT_FAILURE);
-    
-    // check that the parent is still the same (race condition fix)
-    if(getppid() != parent_pid) exit(EXIT_FAILURE);
-
+#include "math.h"
+void car_begin(int car_id, int max_delay) {
+    sync_child_death();
     process_type = 2; // car
-    printf("Hello from car!\n");
+    srand(time(NULL) + car_id);
+    
+    int destination = rand() % 2;
+
+    struct sequence_counter *seq = open_seq();
+    seq_printf(seq, "O %d: started %d\n", car_id, destination);
+
+    usleep((int)(rand() / RAND_MAX * max_delay));
+
+    seq_printf(seq, "O %d: arrived to %d\n", car_id, destination);
+
+    max_delay++;
     exit(EXIT_SUCCESS);
 }
