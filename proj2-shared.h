@@ -1,7 +1,7 @@
-// impl2-shared.h
+// proj2-shared.h
 // Variables shared in memory between all procesess
-#ifndef IMPL2_SHARED_H_
-#define IMPL2_SHARED_H_
+#ifndef PROJ2_SHARED_H_
+#define PROJ2_SHARED_H_
 
 #include "proj2.h"
 #include <semaphore.h>
@@ -26,6 +26,10 @@ struct dock {
         sem_t sem;
         int last_type;
     } boarding;
+    struct {
+        sem_t sem;
+        int vehicles;
+    } registered;
 };
 
 struct docks {
@@ -43,7 +47,7 @@ struct ferry {
     struct {
         sem_t sem;
         int capacity_left;
-    } boarding;
+    } info;
     sem_t disembark_sem;
 };
 

@@ -102,11 +102,13 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     
     docks->dock_count = DOCK_COUNT;
     for(size_t i = 0; i < docks->dock_count; i++) {
+        docks->arr[i].registered.vehicles = 0;
         docks->arr[i].arrivals.cars = 0;
         docks->arr[i].arrivals.trucks = 0;
         docks->arr[i].boarding.last_type = TYPE_INIT;
         if(sem_init(&docks->arr[i].arrivals.sem, 1, 1) == -1) errExit("sem_init");
         if(sem_init(&docks->arr[i].boarding.sem, 1, 0) == -1) errExit("sem_init");
+        if(sem_init(&docks->arr[i].registered.sem, 1, 1) == -1) errExit("sem_init");
     }
 
 
@@ -119,11 +121,11 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     ferry = mmap(NULL, sizeof(*ferry), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if(ferry == MAP_FAILED) errExit("mmap");
 
-    ferry->capacity = ferry_capacity;
-    ferry->boarding.capacity_left = ferry_capacity;
+    ferry->capacity = ferry_capacity; 
+    ferry->info.capacity_left = ferry_capacity;
 
     if(sem_init(&ferry->leave_sem, 1, 0) == -1) errExit("sem_init");
-    if(sem_init(&ferry->boarding.sem, 1, 1) == -1) errExit("sem_init");
+    if(sem_init(&ferry->info.sem, 1, 1) == -1) errExit("sem_init");
     if(sem_init(&ferry->disembark_sem, 1, 0) == -1) errExit("sem_init");
 
     // fork ferry
@@ -157,12 +159,13 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     for(size_t i = 0; i < docks->dock_count; i++) {
         sem_destroy(&docks->arr[i].arrivals.sem);
         sem_destroy(&docks->arr[i].boarding.sem);
+        sem_destroy(&docks->arr[i].registered.sem);
     }
     shm_unlink(DOCKS_NAME);
     
     sem_destroy(&ferry->leave_sem);
     sem_destroy(&ferry->disembark_sem);
-    sem_destroy(&ferry->boarding.sem);
+    sem_destroy(&ferry->info.sem);
     shm_unlink(FERRY_NAME);
 }
 
