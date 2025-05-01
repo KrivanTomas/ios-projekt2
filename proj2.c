@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include "proj2.h"
 #include "proj2-shared.h"
@@ -7,8 +8,15 @@
 #include "car.h"
 #include "truck.h"
 
-// 0: main, 1: ferry, 2: car, 4: truck
-int process_type = 0;
+
+#define DOCK_COUNT 2
+
+// quick debug fix
+#undef O_EXCL
+#define O_EXCL 0
+
+
+int process_type = TYPE_MAIN;
 
 // used in child procesess
 pid_t parent_pid = 0;
@@ -62,8 +70,9 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     // used in child procesess
     parent_pid = getpid();
 
-    // share sequence counter
-    
+    srand(time(NULL));
+
+    // share sequence counter structure
     int fd;
     struct sequence_counter *seq_counter;
 
@@ -74,13 +83,48 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     seq_counter = mmap(NULL, sizeof(*seq_counter), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if(seq_counter == MAP_FAILED) errExit("mmap");
     
-    if(sem_init(&seq_counter->sem, 1, 0) == -1) errExit("sem_init:");
-
+    if(sem_init(&seq_counter->sem, 1, 0) == -1) errExit("sem_init");
+    // set default values
     seq_counter->count = 1;
     
     if(sem_post(&seq_counter->sem) == -1) errExit("sem_post");
 
-    seq_printf(seq_counter, "Hello from main\n");
+    //seq_printf(seq_counter, "Hello from main\n");
+    
+    // share docks structure
+    struct docks *docks;
+    fd = shm_open(DOCKS_NAME, O_CREAT | O_EXCL | O_RDWR, 0600);
+    if(fd == -1) errExit("shm_open");
+    if(ftruncate(fd, sizeof(struct docks) + sizeof(struct dock) * DOCK_COUNT) == -1) errExit("ftruncate");
+
+    docks = mmap(NULL, sizeof(*docks) + sizeof(struct dock) * DOCK_COUNT, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if(docks == MAP_FAILED) errExit("mmap");
+    
+    docks->dock_count = DOCK_COUNT;
+    for(size_t i = 0; i < docks->dock_count; i++) {
+        docks->arr[i].arrivals.cars = 0;
+        docks->arr[i].arrivals.trucks = 0;
+        docks->arr[i].boarding.last_type = TYPE_INIT;
+        if(sem_init(&docks->arr[i].arrivals.sem, 1, 1) == -1) errExit("sem_init");
+        if(sem_init(&docks->arr[i].boarding.sem, 1, 0) == -1) errExit("sem_init");
+    }
+
+
+    // share ferry structure
+    struct ferry *ferry;
+    fd = shm_open(FERRY_NAME, O_CREAT | O_EXCL | O_RDWR, 0600);
+    if(fd == -1) errExit("shm_open");
+    if(ftruncate(fd, sizeof(struct ferry)) == -1) errExit("ftruncate");
+
+    ferry = mmap(NULL, sizeof(*ferry), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if(ferry == MAP_FAILED) errExit("mmap");
+
+    ferry->capacity = ferry_capacity;
+    ferry->boarding.capacity_left = ferry_capacity;
+
+    if(sem_init(&ferry->leave_sem, 1, 0) == -1) errExit("sem_init");
+    if(sem_init(&ferry->boarding.sem, 1, 1) == -1) errExit("sem_init");
+    if(sem_init(&ferry->disembark_sem, 1, 0) == -1) errExit("sem_init");
 
     // fork ferry
     pid_t pid;
@@ -91,24 +135,35 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
 
     // fork cars
     for(int i = 0; i < car_count; i++) {
-        if((pid = fork()) == 0) car_begin(i + 1, max_car_time);
+        int starting_destination = rand() % 2;
+        if((pid = fork()) == 0) car_begin(i + 1, max_car_time, starting_destination);
         else if(pid == -1) errExit("fork");
     }
 
     // fork trucks
     for(int i = 0; i < truck_count; i++) {
-        if((pid = fork()) == 0) truck_begin(i + 1, max_car_time);
+        int starting_destination = rand() % 2;
+        if((pid = fork()) == 0) truck_begin(i + 1, max_car_time, starting_destination);
         else if(pid == -1) errExit("fork");
     }
 
 
-    // unlink shared memory
-    sleep(1);
-    shm_unlink(SEQUENCE_COUNTER_NAME);
+    // wait for all child processes to end
+    while(wait(NULL) > 0);
 
-    // temporary unesed warning fix
-    max_car_time++;
-    max_ferry_time++;
+    // unlink shared memory
+    sem_destroy(&seq_counter->sem);
+    shm_unlink(SEQUENCE_COUNTER_NAME);
+    for(size_t i = 0; i < docks->dock_count; i++) {
+        sem_destroy(&docks->arr[i].arrivals.sem);
+        sem_destroy(&docks->arr[i].boarding.sem);
+    }
+    shm_unlink(DOCKS_NAME);
+    
+    sem_destroy(&ferry->leave_sem);
+    sem_destroy(&ferry->disembark_sem);
+    sem_destroy(&ferry->boarding.sem);
+    shm_unlink(FERRY_NAME);
 }
 
 void print_usage(FILE *file) {

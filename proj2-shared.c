@@ -32,3 +32,26 @@ struct sequence_counter *open_seq() {
 
     return seq;
 }
+
+struct docks *open_docks() {
+    int fd = shm_open(DOCKS_NAME, O_RDWR, 0);
+    if(fd == -1) errExit("shm_open");
+
+    struct docks *docks;
+    docks = mmap(NULL, sizeof(*docks) + sizeof(struct dock) * DOCK_COUNT, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if(docks == MAP_FAILED) errExit("mmap");
+
+    return docks;
+}
+
+struct ferry *open_ferry() {
+    int fd = shm_open(FERRY_NAME, O_RDWR, 0);
+    if(fd == -1) errExit("shm_open");
+
+    struct ferry *ferry;
+    ferry = mmap(NULL, sizeof(*ferry), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if(ferry == MAP_FAILED) errExit("mmap");
+
+    return ferry;
+}
+

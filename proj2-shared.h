@@ -14,7 +14,39 @@ struct sequence_counter {
 };
 
 void seq_printf(struct sequence_counter *seq, char *fmt, ...);
-
 struct sequence_counter *open_seq();
+
+#define DOCKS_NAME "/docks"
+struct dock {
+    struct {
+        sem_t sem;
+        int cars, trucks;
+    } arrivals;
+    struct {
+        sem_t sem;
+        int last_type;
+    } boarding;
+};
+
+struct docks {
+    size_t dock_count;
+    struct dock arr[]; // pirates?
+};
+
+struct docks *open_docks();
+
+
+#define FERRY_NAME "/ferry"
+struct ferry {
+    sem_t leave_sem;
+    int capacity;
+    struct {
+        sem_t sem;
+        int capacity_left;
+    } boarding;
+    sem_t disembark_sem;
+};
+
+struct ferry *open_ferry();
 
 #endif

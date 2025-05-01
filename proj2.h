@@ -11,6 +11,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#define DOCK_COUNT 2
+
 #define errExit(msg) do { perror(msg); exit(EXIT_FAILURE); } while(0)
 
 #endif
