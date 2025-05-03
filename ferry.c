@@ -23,7 +23,6 @@ void ferry_begin(int capacity, int max_delay) {
         // allow disembark
         if(sem_post(&ferry->disembark_sem) == -1) errExit("sem_post");
 
-        printf("wait disembark\n");
         // wait for all vehicles to disembark
         while(1) {
             if(sem_wait(&ferry->disembark_sem) == -1) errExit("sem_wait");
@@ -34,21 +33,23 @@ void ferry_begin(int capacity, int max_delay) {
         }
         if(sem_post(&ferry->info.sem) == -1) errExit("sem_post");
 
-        printf("check status\n");
         // check if there are any vehicles remaining
-        //if(sem_wait(&ferry->info.sem) == -1) errExit("sem_wait");
-        //if(sem_wait(&docks->arr[destination].registered.sem) == -1) errExit("sem_wait");
-        //if(sem_wait(&docks->arr[(destination + 1) % 2].registered.sem) == -1) errExit("sem_wait");
-        //if(docks->arr[destination].registered.vehicles == 0) {
-            //if(ferry->info.capacity_left == ferry->capacity) {
-                //if(docks->arr[(destination + 1) % 2].registered.vehicles == 0) stop = true;
-            //}
-        //}
-        //if(sem_post(&docks->arr[(destination + 1) % 2].registered.sem) == -1) errExit("sem_post");
-        //if(sem_post(&docks->arr[destination].registered.sem) == -1) errExit("sem_post");
-        //if(sem_post(&ferry->info.sem) == -1) errExit("sem_post");
+        if(sem_wait(&ferry->info.sem) == -1) errExit("sem_wait");
+        if(sem_wait(&docks->arr[destination].arrivals.sem) == -1) errExit("sem_wait");
+        if(sem_wait(&docks->arr[(destination + 1) % 2].arrivals.sem) == -1) errExit("sem_wait");
+        if(docks->arr[destination].arrivals.cars
+          + docks->arr[destination].arrivals.trucks
+          == 0) {
+            if(ferry->info.capacity_left == ferry->capacity) {
+                if(docks->arr[(destination + 1) % 2].arrivals.cars
+                  + docks->arr[(destination + 1) % 2].arrivals.trucks
+                  == 0) stop = true;
+            }
+        }
+        if(sem_post(&docks->arr[(destination + 1) % 2].arrivals.sem) == -1) errExit("sem_post");
+        if(sem_post(&docks->arr[destination].arrivals.sem) == -1) errExit("sem_post");
+        if(sem_post(&ferry->info.sem) == -1) errExit("sem_post");
 
-        printf("allow boarding\n");
         // allow boarding
         if(sem_post(&docks->arr[destination].boarding.sem) == -1) errExit("sem_post");
 

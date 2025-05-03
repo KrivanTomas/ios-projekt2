@@ -101,25 +101,25 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     docks = mmap(NULL, sizeof(*docks) + sizeof(struct dock) * DOCK_COUNT, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if(docks == MAP_FAILED) errExit("mmap");
     
-    // predict the future (funky fix)
-    int vehicles_dock_0 = 0;
-    int vehicles_dock_1 = 0;
-    for(int i = 0; i < truck_count * car_count; i++) {
-        if(rand() % 2 == 0) vehicles_dock_0++;
-        else vehicles_dock_1++;
-    }
-    srand(rand_seed);
-    
-    docks->dock_count = DOCK_COUNT;
-    docks->arr[0].registered.vehicles = vehicles_dock_0;
-    docks->arr[1].registered.vehicles = vehicles_dock_1;
-    for(size_t i = 0; i < docks->dock_count; i++) {
+    // count the cars and truck in each dock before forking
+
+    for(int i = 0; i < DOCK_COUNT; i++) {
         docks->arr[i].arrivals.cars = 0;
         docks->arr[i].arrivals.trucks = 0;
+    }
+    for(int i = 0; i < car_count; i++) {
+        docks->arr[rand() % DOCK_COUNT].arrivals.cars++;
+    }
+    for(int i = 0; i < truck_count; i++) {
+        docks->arr[rand() % DOCK_COUNT].arrivals.trucks++;
+    }
+    srand(rand_seed); // reset rand() so the results are the same
+    
+    docks->dock_count = DOCK_COUNT;
+    for(size_t i = 0; i < docks->dock_count; i++) {
         docks->arr[i].boarding.last_type = TYPE_INIT;
         if(sem_init(&docks->arr[i].arrivals.sem, 1, 1) == -1) errExit("sem_init");
         if(sem_init(&docks->arr[i].boarding.sem, 1, 0) == -1) errExit("sem_init");
-        if(sem_init(&docks->arr[i].registered.sem, 1, 1) == -1) errExit("sem_init");
     }
 
 
@@ -170,7 +170,6 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     for(size_t i = 0; i < docks->dock_count; i++) {
         sem_destroy(&docks->arr[i].arrivals.sem);
         sem_destroy(&docks->arr[i].boarding.sem);
-        sem_destroy(&docks->arr[i].registered.sem);
     }
     shm_unlink(DOCKS_NAME);
     

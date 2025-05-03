@@ -28,13 +28,11 @@ void truck_begin(int truck_id, int max_delay, int destination) {
         if(sem_wait(&docks->arr[destination].boarding.sem) == -1) errExit("sem_wait");
         if(sem_wait(&docks->arr[destination].arrivals.sem) == -1) errExit("sem_wait");
         if(sem_wait(&ferry->info.sem) == -1) errExit("sem_wait");
-        if(sem_wait(&docks->arr[destination].registered.sem) == -1) errExit("sem_wait");
 
         if(ferry->info.capacity_left < TRUCK_SIZE
           || (docks->arr[destination].boarding.last_type == TYPE_TRUCK
              && docks->arr[destination].arrivals.cars != 0)) {
             // let the car pass (and try again)
-            if(sem_post(&docks->arr[destination].registered.sem) == -1) errExit("sem_post");
             if(sem_post(&ferry->info.sem) == -1) errExit("sem_post");
             if(sem_post(&docks->arr[destination].arrivals.sem) == -1) errExit("sem_post");
             if(sem_post(&docks->arr[destination].boarding.sem) == -1) errExit("sem_post");
@@ -43,16 +41,13 @@ void truck_begin(int truck_id, int max_delay, int destination) {
         // board the ferry (for real this time)
         docks->arr[destination].arrivals.trucks--;
         docks->arr[destination].boarding.last_type = TYPE_TRUCK;
-        docks->arr[destination].registered.vehicles--;
 
         seq_printf(seq, "N %d: boarding\n", truck_id);
         ferry->info.capacity_left -= TRUCK_SIZE;
 
-        if(docks->arr[destination].registered.vehicles == 0
-          || ferry->info.capacity_left == 0
+        if(ferry->info.capacity_left == 0
           || (docks->arr[destination].arrivals.cars == 0 && docks->arr[destination].arrivals.trucks == 0)
           || (docks->arr[destination].arrivals.cars == 0 && ferry->info.capacity_left < TRUCK_SIZE)) {
-            if(sem_post(&docks->arr[destination].registered.sem) == -1) errExit("sem_post");
             if(sem_post(&ferry->info.sem) == -1) errExit("sem_post");
             if(sem_post(&docks->arr[destination].arrivals.sem) == -1) errExit("sem_post");
 
@@ -62,7 +57,6 @@ void truck_begin(int truck_id, int max_delay, int destination) {
             break;
         }
 
-        if(sem_post(&docks->arr[destination].registered.sem) == -1) errExit("sem_post");
         if(sem_post(&ferry->info.sem) == -1) errExit("sem_post");
         if(sem_post(&docks->arr[destination].arrivals.sem) == -1) errExit("sem_post");
         if(sem_post(&docks->arr[destination].boarding.sem) == -1) errExit("sem_post");

@@ -26,10 +26,6 @@ struct dock {
         sem_t sem;
         int last_type;
     } boarding;
-    struct {
-        sem_t sem;
-        int vehicles;
-    } registered;
 };
 
 struct docks {
