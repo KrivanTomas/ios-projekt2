@@ -70,7 +70,8 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     // used in child procesess
     parent_pid = getpid();
 
-    srand(time(NULL));
+    time_t rand_seed = time(NULL);
+    srand(rand_seed);
 
     // share sequence counter structure
     int fd;
@@ -100,9 +101,19 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     docks = mmap(NULL, sizeof(*docks) + sizeof(struct dock) * DOCK_COUNT, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if(docks == MAP_FAILED) errExit("mmap");
     
+    // predict the future (funky fix)
+    int vehicles_dock_0 = 0;
+    int vehicles_dock_1 = 0;
+    for(int i = 0; i < truck_count * car_count; i++) {
+        if(rand() % 2 == 0) vehicles_dock_0++;
+        else vehicles_dock_1++;
+    }
+    srand(rand_seed);
+    
     docks->dock_count = DOCK_COUNT;
+    docks->arr[0].registered.vehicles = vehicles_dock_0;
+    docks->arr[1].registered.vehicles = vehicles_dock_1;
     for(size_t i = 0; i < docks->dock_count; i++) {
-        docks->arr[i].registered.vehicles = 0;
         docks->arr[i].arrivals.cars = 0;
         docks->arr[i].arrivals.trucks = 0;
         docks->arr[i].boarding.last_type = TYPE_INIT;
