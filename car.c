@@ -3,8 +3,8 @@
 #include "car.h"
 
 void car_begin(int car_id, int max_delay, int destination) {
-    sync_child_death();
     process_type = TYPE_CAR;
+    sync_child_death();
     srand(time(NULL) + car_id);
     
     // open shared memory
@@ -15,7 +15,6 @@ void car_begin(int car_id, int max_delay, int destination) {
 
     usleep((int)(rand() / RAND_MAX * max_delay));
 
-    // register car arrival
     seq_printf(seq, "O %d: arrived to %d\n", car_id, destination);
     
     while(1) {

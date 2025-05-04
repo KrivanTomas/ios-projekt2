@@ -3,11 +3,12 @@
 #include "ferry.h"
 #include "stdbool.h"
 
-void ferry_begin(int capacity, int max_delay) {
-    sync_child_death();
+void ferry_begin(int max_delay) {
     process_type = TYPE_FERRY;
+    sync_child_death();
     int destination = 0;
     bool stop = false;
+    bool leave_early = false;
     srand(time(NULL));
 
 
@@ -40,10 +41,11 @@ void ferry_begin(int capacity, int max_delay) {
         if(docks->arr[destination].arrivals.cars
           + docks->arr[destination].arrivals.trucks
           == 0) {
-            if(ferry->info.capacity_left == ferry->capacity) {
-                if(docks->arr[(destination + 1) % 2].arrivals.cars
-                  + docks->arr[(destination + 1) % 2].arrivals.trucks
-                  == 0) stop = true;
+            if(docks->arr[(destination + 1) % 2].arrivals.cars
+              + docks->arr[(destination + 1) % 2].arrivals.trucks
+              == 0) stop = true;
+            else {
+                leave_early = true;
             }
         }
         if(sem_post(&docks->arr[(destination + 1) % 2].arrivals.sem) == -1) errExit("sem_post");
@@ -54,8 +56,8 @@ void ferry_begin(int capacity, int max_delay) {
         if(sem_post(&docks->arr[destination].boarding.sem) == -1) errExit("sem_post");
 
 
-        if(stop) ;
-        else if(sem_wait(&ferry->leave_sem) == -1) errExit("sem_post");
+        if(stop || leave_early) leave_early = false;
+        else if(sem_wait(&ferry->leave_sem) == -1) errExit("sem_wait");
         seq_printf(seq, "P: leaving %d\n", destination);
 
         destination = (destination + 1) % 2;
@@ -63,7 +65,6 @@ void ferry_begin(int capacity, int max_delay) {
     }
 
     usleep((int)(rand() / RAND_MAX * max_delay));
-    seq_printf(seq, "P: finish");
-    capacity++;
+    seq_printf(seq, "P: finish\n");
     exit(EXIT_SUCCESS);
 }

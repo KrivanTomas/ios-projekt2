@@ -15,6 +15,10 @@
 #undef O_EXCL
 #define O_EXCL 0
 
+#define MASK_SEQUENCE_COUNTER 1
+#define MASK_DOCKS 2
+#define MASK_FERRY 4
+int unlink_mask = 0;
 
 int process_type = TYPE_MAIN;
 
@@ -23,6 +27,8 @@ pid_t parent_pid = 0;
 
 void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_time, int max_ferry_time);
 void print_usage(FILE *file);
+void exit_unlink_mem();
+void close_output();
 
 int main(int argc, char **argv) {
     if(argc != 6) {
@@ -60,6 +66,8 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    if((output_fd = fopen("proj2.out", "w"))== NULL) errExit("fopen");
+    atexit(close_output);
 
     main_begin(truck_count, car_count, ferry_capacity, max_car_time, max_ferry_time);
 
@@ -69,6 +77,7 @@ int main(int argc, char **argv) {
 void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_time, int max_ferry_time) {
     // used in child procesess
     parent_pid = getpid();
+    atexit(exit_unlink_mem);
 
     time_t rand_seed = time(NULL);
     srand(rand_seed);
@@ -79,6 +88,7 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
 
     fd = shm_open(SEQUENCE_COUNTER_NAME, O_CREAT | O_EXCL | O_RDWR, 0600);
     if(fd == -1) errExit("shm_open");
+    unlink_mask |= MASK_SEQUENCE_COUNTER;
     if(ftruncate(fd, sizeof(struct sequence_counter)) == -1) errExit("ftruncate");
 
     seq_counter = mmap(NULL, sizeof(*seq_counter), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -90,19 +100,17 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     
     if(sem_post(&seq_counter->sem) == -1) errExit("sem_post");
 
-    //seq_printf(seq_counter, "Hello from main\n");
-    
     // share docks structure
     struct docks *docks;
     fd = shm_open(DOCKS_NAME, O_CREAT | O_EXCL | O_RDWR, 0600);
     if(fd == -1) errExit("shm_open");
+    unlink_mask |= MASK_DOCKS;
     if(ftruncate(fd, sizeof(struct docks) + sizeof(struct dock) * DOCK_COUNT) == -1) errExit("ftruncate");
 
     docks = mmap(NULL, sizeof(*docks) + sizeof(struct dock) * DOCK_COUNT, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if(docks == MAP_FAILED) errExit("mmap");
     
     // count the cars and truck in each dock before forking
-
     for(int i = 0; i < DOCK_COUNT; i++) {
         docks->arr[i].arrivals.cars = 0;
         docks->arr[i].arrivals.trucks = 0;
@@ -127,6 +135,7 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     struct ferry *ferry;
     fd = shm_open(FERRY_NAME, O_CREAT | O_EXCL | O_RDWR, 0600);
     if(fd == -1) errExit("shm_open");
+    unlink_mask |= MASK_FERRY;
     if(ftruncate(fd, sizeof(struct ferry)) == -1) errExit("ftruncate");
 
     ferry = mmap(NULL, sizeof(*ferry), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
@@ -138,10 +147,11 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     if(sem_init(&ferry->leave_sem, 1, 0) == -1) errExit("sem_init");
     if(sem_init(&ferry->info.sem, 1, 1) == -1) errExit("sem_init");
     if(sem_init(&ferry->disembark_sem, 1, 0) == -1) errExit("sem_init");
+    
 
     // fork ferry
     pid_t pid;
-    if((pid = fork()) == 0) ferry_begin(ferry_capacity, max_ferry_time);
+    if((pid = fork()) == 0) ferry_begin(max_ferry_time);
     else if(pid == -1) errExit("fork");
 
     //return 0;
@@ -177,6 +187,18 @@ void main_begin(int truck_count, int car_count, int ferry_capacity, int max_car_
     sem_destroy(&ferry->disembark_sem);
     sem_destroy(&ferry->info.sem);
     shm_unlink(FERRY_NAME);
+}
+
+void exit_unlink_mem() {
+    if(process_type != TYPE_MAIN) return;
+
+    if(unlink_mask & MASK_SEQUENCE_COUNTER) shm_unlink(SEQUENCE_COUNTER_NAME);
+    if(unlink_mask & MASK_DOCKS) shm_unlink(DOCKS_NAME);
+    if(unlink_mask & MASK_FERRY) shm_unlink(FERRY_NAME);
+}
+
+void close_output() {
+    fclose(output_fd);
 }
 
 void print_usage(FILE *file) {

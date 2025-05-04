@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <string.h>
 
+FILE *output_fd;
 void seq_printf(struct sequence_counter* seq, char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
@@ -14,7 +15,8 @@ void seq_printf(struct sequence_counter* seq, char* fmt, ...) {
     if (buffer == NULL) errExit("malloc");
 
     sprintf(buffer, "%d: %s", seq->count, fmt);
-    vprintf(buffer, args);
+    vfprintf(output_fd, buffer, args);
+    fflush(output_fd);
     free(buffer);
 
     seq->count++;

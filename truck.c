@@ -3,8 +3,8 @@
 #include "truck.h"
 
 void truck_begin(int truck_id, int max_delay, int destination) {
-    sync_child_death();
     process_type = TYPE_TRUCK;
+    sync_child_death();
     srand(time(NULL) + truck_id);
 
     struct sequence_counter *seq = open_seq();
@@ -15,13 +15,7 @@ void truck_begin(int truck_id, int max_delay, int destination) {
 
     usleep((int)(rand() / RAND_MAX * max_delay));
 
-    // register truck arrival
-    if(sem_wait(&docks->arr[destination].arrivals.sem) == -1) errExit("sem_wait");
-    
-    docks->arr[destination].arrivals.trucks++;
     seq_printf(seq, "N %d: arrived to %d\n", truck_id, destination);
-
-    if(sem_post(&docks->arr[destination].arrivals.sem) == -1) errExit("sem_post");
 
     while(1) {
         // (try to) board ferry

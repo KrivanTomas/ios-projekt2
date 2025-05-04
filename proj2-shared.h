@@ -6,7 +6,7 @@
 #include "proj2.h"
 #include <semaphore.h>
 
-
+extern FILE *output_fd;
 #define SEQUENCE_COUNTER_NAME "/seqcount"
 struct sequence_counter {
     sem_t sem;

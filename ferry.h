@@ -1,6 +1,6 @@
 #ifndef FERRY_H_
 #define FERRY_H_
 
-void ferry_begin(int capacity, int max_delay);
+void ferry_begin(int max_delay);
 
 #endif
